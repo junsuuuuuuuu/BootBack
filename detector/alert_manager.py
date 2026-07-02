@@ -13,6 +13,7 @@ class AlertManager:
     def __init__(self) -> None:
         self.events: list[SafetyEvent] = []
         self._open_event_keys: set[tuple[str, int, str]] = set()
+        self._external_event_ids: set[str] = set()
         self._worker_id_map: dict[tuple[str, int], int] = {}
         self._next_worker_id = 1
 
@@ -52,6 +53,35 @@ class AlertManager:
         self._open_event_keys.add(key)
         return event
 
+    def add_external_event(self, payload: dict) -> SafetyEvent | None:
+        event_id = str(payload.get("event_id") or uuid4().hex[:10].upper())
+        if event_id in self._external_event_ids:
+            return None
+
+        timestamp = self._parse_timestamp(str(payload.get("created_at") or ""))
+        worker_id = int(payload.get("worker_id") or 0)
+        event = SafetyEvent(
+            event_id=event_id,
+            timestamp=timestamp,
+            camera_id=str(payload.get("camera_id") or ""),
+            zone=str(payload.get("zone") or ""),
+            worker_id=worker_id,
+            event_type=str(payload.get("event_type") or payload.get("message") or "외부 낙상 알림"),
+            severity=str(payload.get("severity") or "HIGH"),  # type: ignore[arg-type]
+            status=str(payload.get("status") or "OPEN"),  # type: ignore[arg-type]
+            metadata={
+                "source": str(payload.get("source") or "external"),
+                "message": str(payload.get("message") or ""),
+            },
+        )
+        self.events.insert(0, event)
+        self._external_event_ids.add(event_id)
+        self._open_event_keys.add((event.camera_id, event.worker_id, event.event_type))
+        return event
+
+    def has_open_event_for_camera(self, camera_id: str) -> bool:
+        return any(event.camera_id == camera_id and event.status == "OPEN" for event in self.events)
+
     @property
     def open_high_count(self) -> int:
         return sum(1 for event in self.events if event.status == "OPEN" and event.severity == "HIGH")
@@ -68,6 +98,15 @@ class AlertManager:
         if any(event.status == "OPEN" and event.severity == "MEDIUM" for event in self.events):
             return "WARNING"
         return "NORMAL"
+
+    @staticmethod
+    def _parse_timestamp(value: str) -> datetime:
+        if not value:
+            return datetime.now()
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return datetime.now()
 
     def to_dataframe(self) -> pd.DataFrame:
         rows = [

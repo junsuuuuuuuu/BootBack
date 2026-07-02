@@ -12,6 +12,43 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## 배포 연동
+
+React 앱, FastAPI 이벤트 서버, Streamlit 대시보드를 모두 배포한 경우 흐름은 다음과 같습니다.
+
+1. React 앱에서 FastAPI 배포 주소로 `POST /events` 호출
+2. FastAPI가 이벤트를 저장
+3. Streamlit 대시보드가 `GET /events/open`을 주기적으로 호출
+4. 해당 구역 CCTV 카드가 빨간색으로 점등되고 알람/이벤트 히스토리에 추가
+
+Streamlit Cloud의 `Secrets`에 FastAPI 배포 주소를 추가해야 합니다.
+
+```toml
+FASTAPI_BASE_URL = "https://your-fastapi-service.onrender.com"
+```
+
+React 쪽 호출 예시는 다음과 같습니다.
+
+```javascript
+await fetch("https://your-fastapi-service.onrender.com/events", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    zone: "A구역",
+    camera_id: "CAM1",
+    event_type: "외부 낙상 알림",
+    severity: "HIGH",
+    message: "A구역 외부 알림 발생"
+  })
+});
+```
+
+FastAPI는 최소한 다음 엔드포인트를 제공해야 합니다.
+
+- `POST /events`
+- `GET /events/open`
+- `GET /health`
+
 ## 구조
 
 - `app.py`: 단일 Dashboard UI

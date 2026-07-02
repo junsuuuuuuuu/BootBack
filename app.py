@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import tempfile
+import os
 import time
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import requests
 import streamlit as st
 
 from detector.alert_manager import AlertManager
@@ -110,6 +112,14 @@ def inject_css() -> None:
         .kpi-value { font-size: 27px; line-height: 1.1; font-weight: 850; margin-top: 7px; }
         .kpi-foot { color: #b8c2cf; font-size: 12px; margin-top: 8px; }
         .camera-shell { border-radius: 6px; overflow: hidden; background: #06080c; }
+        .camera-shell.camera-alert {
+            border-color: rgba(229, 72, 77, 0.88);
+            box-shadow: 0 0 0 1px rgba(229,72,77,.6), 0 0 30px rgba(229,72,77,.28);
+        }
+        .camera-shell.camera-alert .camera-title {
+            background: #341318;
+            color: #ffd0d2;
+        }
         .camera-title {
             display: flex; justify-content: space-between; align-items: center;
             padding: 8px 10px; background: #151b25;
@@ -234,6 +244,8 @@ def init_state() -> None:
         "progress": {cam["camera_id"]: 0.0 for cam in CAMERAS},
         "worker_counts": {cam["camera_id"]: 0 for cam in CAMERAS},
         "last_frames": {},
+        "external_events_last_fetch": 0.0,
+        "external_api_error": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -270,6 +282,46 @@ def state_class(state: str) -> str:
         "WARNING": "status-warning",
         "EMERGENCY": "status-emergency",
     }.get(state, "status-normal")
+
+
+def get_fastapi_base_url() -> str:
+    try:
+        secret_url = st.secrets.get("FASTAPI_BASE_URL", "")
+    except Exception:
+        secret_url = ""
+    return str(secret_url or os.getenv("FASTAPI_BASE_URL", "")).rstrip("/")
+
+
+def sync_external_events(force: bool = False) -> None:
+    base_url = get_fastapi_base_url()
+    if not base_url:
+        return
+
+    now = time.time()
+    if not force and now - st.session_state.external_events_last_fetch < 2.0:
+        return
+
+    try:
+        response = requests.get(f"{base_url}/events/open", timeout=3)
+        response.raise_for_status()
+        events = response.json()
+        if not isinstance(events, list):
+            return
+        for event in events:
+            if isinstance(event, dict):
+                st.session_state.alert_manager.add_external_event(event)
+        st.session_state.external_api_error = ""
+    except requests.RequestException as exc:
+        st.session_state.external_api_error = f"{exc.__class__.__name__}: {exc}"
+    finally:
+        st.session_state.external_events_last_fetch = now
+
+
+def schedule_external_event_refresh() -> None:
+    if not get_fastapi_base_url() or st.session_state.running:
+        return
+    time.sleep(2.0)
+    st.rerun()
 
 
 def render_login() -> None:
@@ -446,11 +498,13 @@ def render_camera_grid(frame_slots=None) -> list:
         for idx, col in enumerate(cols):
             cam = CAMERAS[row * 2 + idx]
             camera_id = cam["camera_id"]
+            alert_class = " camera-alert" if st.session_state.alert_manager.has_open_event_for_camera(camera_id) else ""
+            camera_status = "외부 알림" if alert_class else "실시간 분석"
             with col:
                 st.markdown(
                     f"""
-                    <div class="camera-shell">
-                        <div class="camera-title"><span>{cam["zone"]} ({camera_id})</span><span>실시간 분석</span></div>
+                    <div class="camera-shell{alert_class}">
+                        <div class="camera-title"><span>{cam["zone"]} ({camera_id})</span><span>{camera_status}</span></div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -566,6 +620,7 @@ def run_analysis_loop(frame_slots: list) -> None:
 
     processors: dict[str, VideoProcessor] = st.session_state.processors
     while st.session_state.running:
+        sync_external_events()
         all_finished = True
         for index, cam in enumerate(CAMERAS):
             camera_id = cam["camera_id"]
@@ -595,6 +650,7 @@ def main() -> None:
     if not st.session_state.authenticated:
         render_login()
         return
+    sync_external_events()
     render_header()
     render_emergency_banner()
 
@@ -617,6 +673,7 @@ def main() -> None:
 
     render_event_history()
     run_analysis_loop(frame_slots)
+    schedule_external_event_refresh()
 
 
 if __name__ == "__main__":
