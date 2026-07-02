@@ -24,13 +24,13 @@ React 앱, FastAPI 이벤트 서버, Streamlit 대시보드를 모두 배포한 
 Streamlit Cloud의 `Secrets`에 FastAPI 배포 주소를 추가해야 합니다.
 
 ```toml
-FASTAPI_BASE_URL = "https://your-fastapi-service.onrender.com"
+FASTAPI_BASE_URL = "https://fastapi-n2qv.onrender.com"
 ```
 
 React 쪽 호출 예시는 다음과 같습니다.
 
 ```javascript
-await fetch("https://your-fastapi-service.onrender.com/events", {
+await fetch("https://fastapi-n2qv.onrender.com/events", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({

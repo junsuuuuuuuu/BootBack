@@ -20,6 +20,7 @@ APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = APP_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 OUTPUT_DIR = DATA_DIR / "outputs"
+DEFAULT_FASTAPI_BASE_URL = "https://fastapi-n2qv.onrender.com"
 CAMERAS = [
     {"camera_id": "CAM1", "zone": "A구역"},
     {"camera_id": "CAM2", "zone": "B구역"},
@@ -289,7 +290,7 @@ def get_fastapi_base_url() -> str:
         secret_url = st.secrets.get("FASTAPI_BASE_URL", "")
     except Exception:
         secret_url = ""
-    return str(secret_url or os.getenv("FASTAPI_BASE_URL", "")).rstrip("/")
+    return str(secret_url or os.getenv("FASTAPI_BASE_URL", "") or DEFAULT_FASTAPI_BASE_URL).rstrip("/")
 
 
 def sync_external_events(force: bool = False) -> None:
