@@ -340,7 +340,7 @@ def render_login() -> None:
         with st.form("login_form", clear_on_submit=False):
             user_id = st.text_input("아이디", placeholder="아이디 입력")
             password = st.text_input("비밀번호", type="password", placeholder="비밀번호 입력")
-            submitted = st.form_submit_button("로그인", use_container_width=True)
+            submitted = st.form_submit_button("로그인", width="stretch")
         if submitted:
             if user_id.strip().lower() == "admin" and password.strip() == "1234":
                 st.session_state.authenticated = True
@@ -515,7 +515,7 @@ def render_camera_grid(frame_slots=None) -> list:
                 )
                 slot = st.empty() if frame_slots is None else frame_slots[row * 2 + idx]
                 if camera_id in st.session_state.last_frames:
-                    slot.image(st.session_state.last_frames[camera_id], channels="BGR", use_container_width=True)
+                    slot.image(st.session_state.last_frames[camera_id], channels="BGR", width="stretch")
                 else:
                     slot.markdown('<div class="placeholder">영상을 업로드하세요</div>', unsafe_allow_html=True)
                 slots.append(slot)
@@ -553,7 +553,7 @@ def render_snapshots() -> None:
     cols = st.columns(min(3, len(snapshots)))
     for col, path in zip(cols, snapshots[:3]):
         if path and Path(path).exists():
-            col.image(str(path), caption=Path(path).name, use_container_width=True)
+            col.image(str(path), caption=Path(path).name, width="stretch")
 
 
 def render_event_history() -> None:
@@ -571,7 +571,7 @@ def render_event_history() -> None:
         data=df.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"safety_events_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
 
     filtered = df.copy()
@@ -582,7 +582,7 @@ def render_event_history() -> None:
         filtered = filtered[filtered["심각도"] == severity]
     if status != "ALL":
         filtered = filtered[filtered["상태"] == status]
-    st.dataframe(filtered, use_container_width=True, hide_index=True, height=260)
+    st.dataframe(filtered, width="stretch", hide_index=True, height=260)
 
 
 def begin_analysis() -> None:
@@ -641,7 +641,7 @@ def run_analysis_loop(frame_slots: list) -> None:
             st.session_state.worker_counts[camera_id] = processor.worker_count
             if result.frame is not None:
                 st.session_state.last_frames[camera_id] = result.frame
-                frame_slots[index].image(result.frame, channels="BGR", use_container_width=True)
+                frame_slots[index].image(result.frame, channels="BGR", width="stretch")
             all_finished = all_finished and result.finished
 
         time.sleep(0.001)
