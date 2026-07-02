@@ -294,6 +294,13 @@ def get_fastapi_base_url() -> str:
 
 
 def sync_external_events(force: bool = False) -> None:
+    if "alert_manager" not in st.session_state:
+        st.session_state.alert_manager = AlertManager()
+    if "external_events_last_fetch" not in st.session_state:
+        st.session_state.external_events_last_fetch = 0.0
+    if "external_api_error" not in st.session_state:
+        st.session_state.external_api_error = ""
+
     base_url = get_fastapi_base_url()
     if not base_url:
         return
