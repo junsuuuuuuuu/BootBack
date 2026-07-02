@@ -11,7 +11,7 @@ import requests
 import streamlit as st
 
 from detector.alert_manager import AlertManager
-from detector.opencv_backend import cv2
+from detector.opencv_backend import cv2, get_opencv_error, is_opencv_available
 from detector.video_processor import CameraConfig, VideoProcessor
 from detector.yolo_detector import YoloPersonDetector
 
@@ -253,8 +253,6 @@ def init_state() -> None:
             st.session_state[key] = value
     if st.session_state.authenticated and st.session_state.detector is None:
         st.session_state.detector = YoloPersonDetector()
-    if st.session_state.authenticated and Path("yolov8n.pt").exists() and getattr(st.session_state.detector, "model", None) is None:
-        st.session_state.detector = YoloPersonDetector()
 
 
 def save_upload(camera_id: str, uploaded_file) -> Path:
@@ -265,6 +263,8 @@ def save_upload(camera_id: str, uploaded_file) -> Path:
 
 
 def load_preview_frame(path: Path, max_width: int = 720):
+    if not is_opencv_available():
+        return None
     capture = cv2.VideoCapture(str(path))
     ok, frame = capture.read()
     capture.release()
@@ -442,6 +442,9 @@ def render_uploads() -> None:
 
 
 def build_processors() -> dict[str, VideoProcessor]:
+    if not is_opencv_available():
+        st.error(f"OpenCV를 사용할 수 없어 영상 분석을 시작할 수 없습니다. {get_opencv_error()}")
+        return {}
     processors: dict[str, VideoProcessor] = {}
     for camera_index, cam in enumerate(CAMERAS):
         camera_id = cam["camera_id"]
@@ -595,8 +598,13 @@ def begin_analysis() -> None:
 def start_analysis_if_requested() -> None:
     uploaded_count = len(st.session_state.uploaded_paths)
     has_upload = uploaded_count > 0
+    detector_ready = bool(getattr(getattr(st.session_state, "detector", None), "status", None) and st.session_state.detector.status.ready)
     st.markdown('<div class="panel-title">분석 제어</div>', unsafe_allow_html=True)
-    if st.button("AI 분석 시작", disabled=not has_upload or st.session_state.running):
+    if not is_opencv_available():
+        st.caption("현재 배포 환경에서 OpenCV가 로드되지 않아 영상 분석은 비활성화됩니다. 외부 알림 관제는 정상 동작합니다.")
+    elif not detector_ready:
+        st.caption("AI detector가 준비되지 않았습니다. 외부 알림 관제는 정상 동작합니다.")
+    if st.button("AI 분석 시작", disabled=not has_upload or st.session_state.running or not is_opencv_available() or not detector_ready):
         begin_analysis()
     st.checkbox(
         "업로드 후 자동 분석",

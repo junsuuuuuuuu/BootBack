@@ -34,3 +34,13 @@ if not isinstance(cv2, _UnavailableCV2):
     cv2.waitKey = _disable_gui
     cv2.namedWindow = _disable_gui
     cv2.destroyAllWindows = _disable_gui
+
+
+def is_opencv_available() -> bool:
+    return not isinstance(cv2, _UnavailableCV2)
+
+
+def get_opencv_error() -> str:
+    if isinstance(cv2, _UnavailableCV2):
+        return f"{cv2.error.__class__.__name__}: {cv2.error}"
+    return ""

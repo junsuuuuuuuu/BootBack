@@ -6,7 +6,7 @@ from typing import Iterable
 import numpy as np
 
 from .models import Detection
-from .opencv_backend import cv2
+from .opencv_backend import cv2, get_opencv_error, is_opencv_available
 
 
 @dataclass
@@ -22,13 +22,12 @@ class YoloPersonDetector:
     def __init__(self, model_name: str = "yolov8n.pt", confidence: float = 0.35) -> None:
         self.confidence = confidence
         self.model = None
+        self._hog = None
         self.status = DetectorStatus(
-            engine="OpenCV fallback",
-            ready=True,
-            message="YOLO unavailable, using OpenCV HOG person detector",
+            engine="Unavailable",
+            ready=False,
+            message="Detector is not initialized",
         )
-        self._hog = cv2.HOGDescriptor()
-        self._hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
         try:
             from ultralytics import YOLO
@@ -39,16 +38,38 @@ class YoloPersonDetector:
                 ready=True,
                 message=f"{model_name} loaded",
             )
+            return
         except Exception as exc:  # pragma: no cover - depends on local model availability
+            yolo_error = f"{exc.__class__.__name__}: {exc}"
+
+        if not is_opencv_available():
+            self.status = DetectorStatus(
+                engine="Unavailable",
+                ready=False,
+                message=f"OpenCV unavailable: {get_opencv_error()}",
+            )
+            return
+
+        try:
+            self._hog = cv2.HOGDescriptor()
+            self._hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
             self.status = DetectorStatus(
                 engine="OpenCV fallback",
                 ready=True,
-                message=f"YOLO unavailable: {exc.__class__.__name__}",
+                message=f"YOLO unavailable ({yolo_error}), using OpenCV HOG person detector",
+            )
+        except Exception as exc:
+            self.status = DetectorStatus(
+                engine="Unavailable",
+                ready=False,
+                message=f"OpenCV HOG unavailable: {exc.__class__.__name__}: {exc}",
             )
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
         if self.model is not None:
             return self._detect_yolo(frame)
+        if self._hog is None:
+            return []
         return self._detect_hog(frame)
 
     def _detect_yolo(self, frame: np.ndarray) -> list[Detection]:
@@ -69,6 +90,8 @@ class YoloPersonDetector:
         return self._merge_fragmented_people(detections)
 
     def _detect_hog(self, frame: np.ndarray) -> list[Detection]:
+        if self._hog is None:
+            return []
         scale = 416 / max(frame.shape[:2])
         small = cv2.resize(frame, None, fx=scale, fy=scale) if scale < 1 else frame
         rects, weights = self._hog.detectMultiScale(
