@@ -451,7 +451,7 @@ def build_processors() -> dict[str, VideoProcessor]:
         if camera_id not in st.session_state.uploaded_paths:
             continue
         source = st.session_state.uploaded_paths[camera_id]
-        processors[camera_id] = VideoProcessor(
+        processor = VideoProcessor(
             CameraConfig(camera_id=camera_id, zone=cam["zone"], source_path=Path(source)),
             detector=st.session_state.detector,
             alert_manager=st.session_state.alert_manager,
@@ -460,6 +460,11 @@ def build_processors() -> dict[str, VideoProcessor]:
             max_display_width=384,
             detection_offset=camera_index * 2,
         )
+        if not processor.is_opened:
+            processor.release()
+            st.error(f"{cam['zone']} ({camera_id}) 영상을 열 수 없습니다. mp4(H.264) 형식으로 다시 업로드해 주세요.")
+            continue
+        processors[camera_id] = processor
     return processors
 
 
@@ -595,6 +600,14 @@ def begin_analysis() -> None:
     st.session_state.progress = {cam["camera_id"]: 0.0 for cam in CAMERAS}
 
 
+def get_playback_delay(processors: dict[str, VideoProcessor]) -> float:
+    fps_values = [processor.fps for processor in processors.values() if processor.fps and processor.fps > 0]
+    if not fps_values:
+        return 1 / 20
+    target_fps = min(24.0, max(8.0, max(fps_values)))
+    return 1 / target_fps
+
+
 def start_analysis_if_requested() -> None:
     uploaded_count = len(st.session_state.uploaded_paths)
     has_upload = uploaded_count > 0
@@ -628,7 +641,13 @@ def run_analysis_loop(frame_slots: list) -> None:
         return
 
     processors: dict[str, VideoProcessor] = st.session_state.processors
+    if not processors:
+        st.session_state.running = False
+        return
+
+    playback_delay = get_playback_delay(processors)
     while st.session_state.running:
+        loop_started_at = time.perf_counter()
         sync_external_events()
         all_finished = True
         for index, cam in enumerate(CAMERAS):
@@ -644,13 +663,15 @@ def run_analysis_loop(frame_slots: list) -> None:
                 frame_slots[index].image(result.frame, channels="BGR", width="stretch")
             all_finished = all_finished and result.finished
 
-        time.sleep(0.001)
         if all_finished:
             for processor in processors.values():
                 processor.release()
             st.session_state.running = False
             st.session_state.completed = True
             st.rerun()
+
+        elapsed = time.perf_counter() - loop_started_at
+        time.sleep(max(0.001, playback_delay - elapsed))
 
 
 def main() -> None:
