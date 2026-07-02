@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+
+.agents/
+.codex/
+
+data/uploads/
+data/outputs/
+data/external_events.json
+
+.streamlit/secrets.toml
+.env
+
