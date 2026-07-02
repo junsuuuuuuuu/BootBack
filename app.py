@@ -5,11 +5,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import cv2
 import pandas as pd
 import streamlit as st
 
 from detector.alert_manager import AlertManager
+from detector.opencv_backend import cv2
 from detector.video_processor import CameraConfig, VideoProcessor
 from detector.yolo_detector import YoloPersonDetector
 

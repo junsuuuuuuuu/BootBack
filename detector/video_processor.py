@@ -6,13 +6,13 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from .alert_manager import AlertManager
 from .fall_detector import FallDetector
 from .models import Detection, SafetyEvent
+from .opencv_backend import cv2
 from .tracker import CentroidTracker
 from .yolo_detector import YoloPersonDetector
 
