@@ -82,6 +82,16 @@ class AlertManager:
     def has_open_event_for_camera(self, camera_id: str) -> bool:
         return any(event.camera_id == camera_id and event.status == "OPEN" for event in self.events)
 
+    def close_open_events(self) -> int:
+        closed_count = 0
+        for event in self.events:
+            if event.status != "OPEN":
+                continue
+            event.status = "CLOSED"
+            self._open_event_keys.discard((event.camera_id, event.worker_id, event.event_type))
+            closed_count += 1
+        return closed_count
+
     @property
     def open_high_count(self) -> int:
         return sum(1 for event in self.events if event.status == "OPEN" and event.severity == "HIGH")

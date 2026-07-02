@@ -491,9 +491,10 @@ def render_progress() -> None:
 
 def render_emergency_banner() -> None:
     manager: AlertManager = st.session_state.alert_manager
-    if manager.system_state != "EMERGENCY" or not manager.events:
+    open_events = [event for event in manager.events if event.status == "OPEN"]
+    if manager.system_state != "EMERGENCY" or not open_events:
         return
-    event = manager.events[0]
+    event = open_events[0]
     st.markdown(
         f"""
         <div class="emergency-banner">
@@ -504,6 +505,10 @@ def render_emergency_banner() -> None:
         """,
         unsafe_allow_html=True,
     )
+    if st.button("상황 종료 / 알림 초기화", type="primary", key="clear_open_alerts"):
+        manager.close_open_events()
+        st.session_state.external_events_last_fetch = 0.0
+        st.rerun()
 
 
 def render_camera_grid(frame_slots=None) -> list:
@@ -536,7 +541,7 @@ def render_camera_grid(frame_slots=None) -> list:
 
 def render_alert_panel() -> None:
     st.markdown('<div class="section-title">실시간 알람 패널</div>', unsafe_allow_html=True)
-    events = st.session_state.alert_manager.events[:8]
+    events = [event for event in st.session_state.alert_manager.events if event.status == "OPEN"][:8]
     if not events:
         st.info("현재 발생한 낙상 알람이 없습니다.")
         return
